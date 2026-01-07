@@ -4,9 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
+import { useBots, useBotConfig, useUpdateBotConfig } from "@/hooks/useBotConfig";
+import { toast } from "sonner";
+import type { BotType } from "@/types/database";
 
-interface Bot {
-  id: string;
+interface BotTemplate {
+  id: BotType;
   name: string;
   description: string;
   icon: React.ElementType;
@@ -15,7 +18,7 @@ interface Bot {
   features: string[];
 }
 
-const bots: Bot[] = [
+const botTemplates: BotTemplate[] = [
   {
     id: "restaurant",
     name: "Restaurant Bot",
@@ -71,12 +74,28 @@ const bots: Bot[] = [
 ];
 
 export default function BotMarketplace() {
-  const [selectedBot, setSelectedBot] = useState<string | null>(null);
-  const [previewBot, setPreviewBot] = useState<Bot | null>(null);
+  const { data: botConfig, isLoading } = useBotConfig();
+  const updateBotConfig = useUpdateBotConfig();
+  const [previewBot, setPreviewBot] = useState<BotTemplate | null>(null);
 
-  const handleSelectBot = (botId: string) => {
-    setSelectedBot(botId);
+  const handleSelectBot = async (botId: BotType) => {
+    try {
+      await updateBotConfig.mutateAsync({ bot_id: botId });
+      toast.success("Bot selected! Configure it in Bot Config page.");
+    } catch (error) {
+      toast.error("Failed to select bot");
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  const selectedBotId = botConfig?.bot_id;
 
   return (
     <div className="animate-fade-in">
@@ -92,19 +111,19 @@ export default function BotMarketplace() {
         </div>
       </div>
 
-      {selectedBot && (
+      {selectedBotId && (
         <div className="mb-6 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-4 py-3">
           <Check className="h-5 w-5 text-success" />
           <span className="text-sm font-medium text-success">
-            {bots.find((b) => b.id === selectedBot)?.name} selected! Configure it in the Bot Config page.
+            {botTemplates.find((b) => b.id === selectedBotId)?.name} selected! Configure it in the Bot Config page.
           </span>
         </div>
       )}
 
       <div className="grid gap-6 md:grid-cols-2">
-        {bots.map((bot) => {
+        {botTemplates.map((bot) => {
           const Icon = bot.icon;
-          const isSelected = selectedBot === bot.id;
+          const isSelected = selectedBotId === bot.id;
 
           return (
             <Card
@@ -159,6 +178,7 @@ export default function BotMarketplace() {
                   <Button
                     className="w-full"
                     variant={isSelected ? "outline" : "default"}
+                    disabled={updateBotConfig.isPending}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSelectBot(bot.id);
@@ -228,6 +248,7 @@ export default function BotMarketplace() {
                 </Button>
                 <Button
                   className="flex-1"
+                  disabled={updateBotConfig.isPending}
                   onClick={() => {
                     handleSelectBot(previewBot.id);
                     setPreviewBot(null);

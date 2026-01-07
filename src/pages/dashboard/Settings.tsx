@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Settings as SettingsIcon, User, Globe, LogOut, Save, Building } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,6 +13,9 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "react-router-dom";
+import { useBusiness, useUpdateBusiness } from "@/hooks/useBusiness";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const timezones = [
   { value: "UTC", label: "UTC (Coordinated Universal Time)" },
@@ -30,29 +32,48 @@ const timezones = [
 
 export default function Settings() {
   const navigate = useNavigate();
-  const [isSaving, setIsSaving] = useState(false);
-  const [profile, setProfile] = useState({
-    businessName: "John's Restaurant",
-    email: "john@restaurant.com",
-    phone: "+1 234 567 8900",
-    address: "123 Main Street, New York, NY 10001",
-    timezone: "America/New_York",
-  });
+  const { user, signOut } = useAuth();
+  const { data: business, isLoading } = useBusiness();
+  const updateBusiness = useUpdateBusiness();
 
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-    }, 1000);
+  const [businessName, setBusinessName] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
+
+  useEffect(() => {
+    if (business) {
+      setBusinessName(business.name || "");
+      setTimezone(business.timezone || "UTC");
+    }
+  }, [business]);
+
+  const handleSave = async () => {
+    try {
+      await updateBusiness.mutateAsync({
+        name: businessName,
+        timezone: timezone,
+      });
+      toast.success("Settings saved!");
+    } catch (error) {
+      toast.error("Failed to save settings");
+    }
   };
 
-  const handleLogout = () => {
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate("/login");
+    } catch (error) {
+      toast.error("Failed to log out");
+    }
   };
 
-  const updateProfile = (key: keyof typeof profile, value: string) => {
-    setProfile((prev) => ({ ...prev, [key]: value }));
-  };
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -77,43 +98,16 @@ export default function Settings() {
                 <Building className="h-4 w-4" />
                 Business Profile
               </CardTitle>
-              <CardDescription>Your business information visible to customers</CardDescription>
+              <CardDescription>Your business information</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="businessName">Business Name</Label>
-                  <Input
-                    id="businessName"
-                    value={profile.businessName}
-                    onChange={(e) => updateProfile("businessName", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={profile.email}
-                    onChange={(e) => updateProfile("email", e.target.value)}
-                  />
-                </div>
-              </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
+                <Label htmlFor="businessName">Business Name</Label>
                 <Input
-                  id="phone"
-                  value={profile.phone}
-                  onChange={(e) => updateProfile("phone", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Business Address</Label>
-                <Textarea
-                  id="address"
-                  value={profile.address}
-                  onChange={(e) => updateProfile("address", e.target.value)}
-                  rows={2}
+                  id="businessName"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Your Business Name"
                 />
               </div>
             </CardContent>
@@ -132,8 +126,8 @@ export default function Settings() {
               <div className="space-y-2">
                 <Label htmlFor="timezone">Select Timezone</Label>
                 <Select
-                  value={profile.timezone}
-                  onValueChange={(value) => updateProfile("timezone", value)}
+                  value={timezone}
+                  onValueChange={setTimezone}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select timezone" />
@@ -152,9 +146,9 @@ export default function Settings() {
 
           {/* Save Button */}
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button onClick={handleSave} disabled={updateBusiness.isPending}>
               <Save className="mr-2 h-4 w-4" />
-              {isSaving ? "Saving..." : "Save Changes"}
+              {updateBusiness.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>
@@ -171,11 +165,11 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-xl font-medium text-primary-foreground">
-                  JR
+                  {businessName?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U"}
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{profile.businessName}</p>
-                  <p className="text-sm text-muted-foreground">{profile.email}</p>
+                  <p className="font-medium text-foreground">{businessName || "Your Business"}</p>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
                 </div>
               </div>
 
@@ -186,11 +180,11 @@ export default function Settings() {
                 <div className="rounded-lg bg-accent p-3">
                   <p className="font-medium text-foreground">Free Plan</p>
                   <p className="text-sm text-muted-foreground">
-                    Limited to 100 messages/month
+                    Unlimited messages via n8n
                   </p>
                 </div>
-                <Button variant="outline" className="w-full">
-                  Upgrade Plan
+                <Button variant="outline" className="w-full" disabled>
+                  Upgrade Plan (Coming Soon)
                 </Button>
               </div>
 
@@ -212,10 +206,10 @@ export default function Settings() {
               <CardTitle>Need Help?</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" disabled>
                 View Documentation
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" disabled>
                 Contact Support
               </Button>
             </CardContent>

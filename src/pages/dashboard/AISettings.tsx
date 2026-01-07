@@ -1,24 +1,47 @@
-import { useState } from "react";
-import { Sparkles, Info, Eye, EyeOff, Save, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Info, Save, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Textarea } from "@/components/ui/textarea";
+import { useAISettings, useUpdateAISettings } from "@/hooks/useAISettings";
+import { toast } from "sonner";
 
 export default function AISettings() {
-  const [isAIEnabled, setIsAIEnabled] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const { data: aiSettings, isLoading } = useAISettings();
+  const updateAISettings = useUpdateAISettings();
 
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-    }, 1000);
+  const [isAIEnabled, setIsAIEnabled] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState("");
+
+  useEffect(() => {
+    if (aiSettings) {
+      setIsAIEnabled(aiSettings.ai_enabled || false);
+      setSystemPrompt(aiSettings.system_prompt || "");
+    }
+  }, [aiSettings]);
+
+  const handleSave = async () => {
+    try {
+      await updateAISettings.mutateAsync({
+        ai_enabled: isAIEnabled,
+        system_prompt: systemPrompt || null,
+      });
+      toast.success("AI settings saved!");
+    } catch (error) {
+      toast.error("Failed to save settings");
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -42,7 +65,7 @@ export default function AISettings() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>AI Mode</CardTitle>
-                  <CardDescription>Enable intelligent responses powered by Gemini</CardDescription>
+                  <CardDescription>Enable intelligent responses powered by AI</CardDescription>
                 </div>
                 <StatusBadge variant={isAIEnabled ? "active" : "inactive"}>
                   {isAIEnabled ? "AI Enabled" : "Static Mode"}
@@ -54,7 +77,7 @@ export default function AISettings() {
                 <div>
                   <Label className="text-base">Enable AI Responses</Label>
                   <p className="text-sm text-muted-foreground">
-                    When enabled, your bot will use Gemini AI for intelligent responses
+                    When enabled, your bot will use AI for intelligent responses
                   </p>
                 </div>
                 <Switch
@@ -67,34 +90,23 @@ export default function AISettings() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Gemini API Key</CardTitle>
-              <CardDescription>Your API key is stored securely and never shared</CardDescription>
+              <CardTitle>System Prompt</CardTitle>
+              <CardDescription>Customize how the AI responds to messages</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="apiKey">API Key</Label>
-                <div className="relative">
-                  <Input
-                    id="apiKey"
-                    type={showApiKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter your Gemini API key"
-                    disabled={!isAIEnabled}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    disabled={!isAIEnabled}
-                  >
-                    {showApiKey ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
+                <Label htmlFor="systemPrompt">AI Instructions</Label>
+                <Textarea
+                  id="systemPrompt"
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  placeholder="You are a helpful assistant for a business. Be friendly, professional, and helpful..."
+                  rows={6}
+                  disabled={!isAIEnabled}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This prompt tells the AI how to behave when responding to customers
+                </p>
               </div>
 
               <div className="rounded-lg bg-accent/50 p-4">
@@ -102,15 +114,8 @@ export default function AISettings() {
                   <Info className="h-4 w-4 shrink-0 text-accent-foreground" />
                   <div className="text-sm text-muted-foreground">
                     <p>
-                      Get your Gemini API key from the{" "}
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        Google AI Studio
-                      </a>
+                      AI is processed by your n8n workflow. Make sure your workflow is configured
+                      to handle AI responses when enabled.
                     </p>
                   </div>
                 </div>
@@ -118,11 +123,11 @@ export default function AISettings() {
 
               <Button
                 onClick={handleSave}
-                disabled={!isAIEnabled || isSaving}
+                disabled={updateAISettings.isPending}
                 className="w-full"
               >
                 <Save className="mr-2 h-4 w-4" />
-                {isSaving ? "Saving..." : "Save API Key"}
+                {updateAISettings.isPending ? "Saving..." : "Save Settings"}
               </Button>
             </CardContent>
           </Card>
@@ -143,7 +148,7 @@ export default function AISettings() {
                   <div>
                     <p className="font-medium text-foreground">Customer sends message</p>
                     <p className="text-sm text-muted-foreground">
-                      Message is received through WhatsApp
+                      Message is received through WhatsApp via n8n
                     </p>
                   </div>
                 </div>
@@ -152,9 +157,9 @@ export default function AISettings() {
                     2
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">AI analyzes context</p>
+                    <p className="font-medium text-foreground">n8n checks AI setting</p>
                     <p className="text-sm text-muted-foreground">
-                      Gemini understands the intent and your business info
+                      Your workflow reads the ai_enabled flag from the database
                     </p>
                   </div>
                 </div>
@@ -163,9 +168,9 @@ export default function AISettings() {
                     3
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Smart response generated</p>
+                    <p className="font-medium text-foreground">AI generates response</p>
                     <p className="text-sm text-muted-foreground">
-                      AI creates a natural, helpful response
+                      n8n uses the system prompt to generate contextual replies
                     </p>
                   </div>
                 </div>
@@ -173,21 +178,23 @@ export default function AISettings() {
             </CardContent>
           </Card>
 
-          <Card className="border-warning/50 bg-warning/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-warning">
-                <AlertTriangle className="h-5 w-5" />
-                Static Mode Active
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Without an AI key, your bot will only respond with the pre-configured 
-                messages from your Bot Configuration. For more intelligent, contextual 
-                responses, enable AI mode and add your Gemini API key.
-              </p>
-            </CardContent>
-          </Card>
+          {!isAIEnabled && (
+            <Card className="border-warning/50 bg-warning/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-warning">
+                  <AlertTriangle className="h-5 w-5" />
+                  Static Mode Active
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Without AI enabled, your bot will only respond with the pre-configured 
+                  messages from your Bot Configuration. For more intelligent, contextual 
+                  responses, enable AI mode above.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

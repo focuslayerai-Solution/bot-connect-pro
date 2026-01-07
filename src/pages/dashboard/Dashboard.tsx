@@ -4,8 +4,47 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useWhatsAppNumber } from "@/hooks/useWhatsApp";
+import { useBotConfig } from "@/hooks/useBotConfig";
+import { useAISettings } from "@/hooks/useAISettings";
+import { useMessageStats } from "@/hooks/useMessages";
+import { useOrderStats } from "@/hooks/useOrders";
+import { useAppointmentStats } from "@/hooks/useAppointments";
 
 export default function Dashboard() {
+  const { data: whatsappNumber } = useWhatsAppNumber();
+  const { data: botConfig } = useBotConfig();
+  const { data: aiSettings } = useAISettings();
+  const messageStats = useMessageStats();
+  const orderStats = useOrderStats();
+  const appointmentStats = useAppointmentStats();
+
+  const getWhatsAppStatus = () => {
+    if (!whatsappNumber) return { variant: "warning" as const, label: "Not Connected" };
+    switch (whatsappNumber.verification_status) {
+      case "connected":
+        return { variant: "success" as const, label: "Connected" };
+      case "verifying":
+        return { variant: "warning" as const, label: "Verifying" };
+      default:
+        return { variant: "warning" as const, label: "Not Connected" };
+    }
+  };
+
+  const getBotStatus = () => {
+    if (!botConfig?.bot_id) return { variant: "inactive" as const, label: "Inactive" };
+    return { variant: "active" as const, label: "Active" };
+  };
+
+  const getAIStatus = () => {
+    if (!aiSettings?.ai_enabled) return { variant: "default" as const, label: "Static Mode" };
+    return { variant: "active" as const, label: "AI Enabled" };
+  };
+
+  const whatsappStatus = getWhatsAppStatus();
+  const botStatus = getBotStatus();
+  const aiStatus = getAIStatus();
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -22,13 +61,15 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <StatusBadge variant="warning">Not Connected</StatusBadge>
+              <StatusBadge variant={whatsappStatus.variant}>{whatsappStatus.label}</StatusBadge>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Connect your WhatsApp Business number
+              {whatsappNumber?.display_phone_number || "Connect your WhatsApp Business number"}
             </p>
             <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link to="/dashboard/whatsapp">Connect Now</Link>
+              <Link to="/dashboard/whatsapp">
+                {whatsappNumber?.verification_status === "connected" ? "Manage" : "Connect Now"}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -40,13 +81,15 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <StatusBadge variant="inactive">Inactive</StatusBadge>
+              <StatusBadge variant={botStatus.variant}>{botStatus.label}</StatusBadge>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Select and configure your bot
+              {botConfig?.bot_id ? "Bot configured and ready" : "Select and configure your bot"}
             </p>
             <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link to="/dashboard/marketplace">Choose Bot</Link>
+              <Link to="/dashboard/marketplace">
+                {botConfig?.bot_id ? "Manage Bot" : "Choose Bot"}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -58,13 +101,15 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <StatusBadge variant="default">Static Mode</StatusBadge>
+              <StatusBadge variant={aiStatus.variant}>{aiStatus.label}</StatusBadge>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Add Gemini API key for AI responses
+              {aiSettings?.ai_enabled ? "AI-powered responses active" : "Add Gemini API key for AI responses"}
             </p>
             <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link to="/dashboard/ai-settings">Enable AI</Link>
+              <Link to="/dashboard/ai-settings">
+                {aiSettings?.ai_enabled ? "Manage AI" : "Enable AI"}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -76,24 +121,24 @@ export default function Dashboard() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
             title="Messages"
-            value="0"
+            value={String(messageStats.today)}
             description="Total messages today"
             icon={MessageSquare}
-            trend={{ value: 0, isPositive: true }}
+            trend={{ value: messageStats.total, isPositive: true }}
           />
           <StatCard
             title="Orders"
-            value="0"
+            value={String(orderStats.today)}
             description="Orders received"
             icon={ShoppingCart}
-            trend={{ value: 0, isPositive: true }}
+            trend={{ value: orderStats.pending, isPositive: true }}
           />
           <StatCard
             title="Appointments"
-            value="0"
+            value={String(appointmentStats.today)}
             description="Appointments booked"
             icon={Calendar}
-            trend={{ value: 0, isPositive: true }}
+            trend={{ value: appointmentStats.upcoming, isPositive: true }}
           />
         </div>
       </div>
@@ -107,8 +152,8 @@ export default function Dashboard() {
         <CardContent>
           <div className="space-y-4">
             <div className="flex items-start gap-4 rounded-lg border border-border p-4">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
-                1
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${whatsappNumber?.verification_status === "connected" ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"} text-sm font-medium`}>
+                {whatsappNumber?.verification_status === "connected" ? "✓" : "1"}
               </div>
               <div className="flex-1">
                 <h4 className="font-medium text-foreground">Connect WhatsApp</h4>
@@ -122,8 +167,8 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-start gap-4 rounded-lg border border-border p-4">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
-                2
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${botConfig?.bot_id ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"} text-sm font-medium`}>
+                {botConfig?.bot_id ? "✓" : "2"}
               </div>
               <div className="flex-1">
                 <h4 className="font-medium text-foreground">Choose a Bot</h4>

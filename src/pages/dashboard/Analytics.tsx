@@ -1,4 +1,5 @@
-import { BarChart3, TrendingUp, MessageSquare, ShoppingCart, Calendar, Bot, Sparkles } from "lucide-react";
+import { useMemo } from "react";
+import { BarChart3, TrendingUp, MessageSquare, ShoppingCart, Calendar, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import {
@@ -15,43 +16,70 @@ import {
   Pie,
   Cell,
 } from "recharts";
-
-const messagesData = [
-  { date: "Mon", messages: 45 },
-  { date: "Tue", messages: 52 },
-  { date: "Wed", messages: 38 },
-  { date: "Thu", messages: 65 },
-  { date: "Fri", messages: 78 },
-  { date: "Sat", messages: 56 },
-  { date: "Sun", messages: 42 },
-];
-
-const ordersData = [
-  { date: "Mon", orders: 12 },
-  { date: "Tue", orders: 18 },
-  { date: "Wed", orders: 15 },
-  { date: "Thu", orders: 22 },
-  { date: "Fri", orders: 28 },
-  { date: "Sat", orders: 35 },
-  { date: "Sun", orders: 20 },
-];
-
-const appointmentsData = [
-  { date: "Mon", appointments: 8 },
-  { date: "Tue", appointments: 10 },
-  { date: "Wed", appointments: 12 },
-  { date: "Thu", appointments: 9 },
-  { date: "Fri", appointments: 15 },
-  { date: "Sat", appointments: 18 },
-  { date: "Sun", appointments: 5 },
-];
-
-const aiVsStaticData = [
-  { name: "AI Responses", value: 320, color: "hsl(142, 70%, 45%)" },
-  { name: "Static Responses", value: 180, color: "hsl(210, 20%, 80%)" },
-];
+import { useMessages, useMessageStats } from "@/hooks/useMessages";
+import { useOrders, useOrderStats } from "@/hooks/useOrders";
+import { useAppointments, useAppointmentStats } from "@/hooks/useAppointments";
+import { format, subDays, startOfDay, isSameDay } from "date-fns";
 
 export default function Analytics() {
+  const { data: messages = [] } = useMessages();
+  const { data: orders = [] } = useOrders();
+  const { data: appointments = [] } = useAppointments();
+  const messageStats = useMessageStats();
+  const orderStats = useOrderStats();
+  const appointmentStats = useAppointmentStats();
+
+  // Calculate messages per day for the last 7 days
+  const messagesData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dayStart = startOfDay(date);
+      const count = messages.filter((m) => isSameDay(new Date(m.created_at), dayStart)).length;
+      days.push({ date: format(date, "EEE"), messages: count });
+    }
+    return days;
+  }, [messages]);
+
+  // Calculate orders per day
+  const ordersData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dayStart = startOfDay(date);
+      const count = orders.filter((o) => isSameDay(new Date(o.created_at), dayStart)).length;
+      days.push({ date: format(date, "EEE"), orders: count });
+    }
+    return days;
+  }, [orders]);
+
+  // Calculate appointments per day
+  const appointmentsData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dayStart = startOfDay(date);
+      const count = appointments.filter((a) => isSameDay(new Date(a.scheduled_at), dayStart)).length;
+      days.push({ date: format(date, "EEE"), appointments: count });
+    }
+    return days;
+  }, [appointments]);
+
+  // Calculate AI vs Static responses
+  const aiVsStaticData = useMemo(() => {
+    const botMessages = messages.filter((m) => m.direction === "outbound");
+    // For now, assume all outbound messages are from bot (static)
+    // This would need AI tracking in the message source
+    return [
+      { name: "Bot Responses", value: botMessages.length, color: "hsl(142, 70%, 45%)" },
+      { name: "Human Messages", value: messages.filter((m) => m.direction === "inbound").length, color: "hsl(210, 20%, 80%)" },
+    ];
+  }, [messages]);
+
+  const totalWeekMessages = messagesData.reduce((acc, d) => acc + d.messages, 0);
+  const totalWeekOrders = ordersData.reduce((acc, d) => acc + d.orders, 0);
+  const totalWeekAppointments = appointmentsData.reduce((acc, d) => acc + d.appointments, 0);
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -70,31 +98,31 @@ export default function Analytics() {
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Messages"
-          value="376"
+          value={String(totalWeekMessages)}
           description="This week"
           icon={MessageSquare}
-          trend={{ value: 12, isPositive: true }}
+          trend={{ value: messageStats.today, isPositive: true }}
         />
         <StatCard
           title="Total Orders"
-          value="150"
+          value={String(totalWeekOrders)}
           description="This week"
           icon={ShoppingCart}
-          trend={{ value: 8, isPositive: true }}
+          trend={{ value: orderStats.today, isPositive: true }}
         />
         <StatCard
           title="Appointments"
-          value="77"
+          value={String(totalWeekAppointments)}
           description="This week"
           icon={Calendar}
-          trend={{ value: 5, isPositive: true }}
+          trend={{ value: appointmentStats.today, isPositive: true }}
         />
         <StatCard
-          title="AI Accuracy"
-          value="94%"
-          description="Response quality"
+          title="Response Rate"
+          value={messages.length > 0 ? `${Math.round((messages.filter(m => m.direction === 'outbound').length / Math.max(messages.filter(m => m.direction === 'inbound').length, 1)) * 100)}%` : "0%"}
+          description="Bot responses"
           icon={TrendingUp}
-          trend={{ value: 2, isPositive: true }}
+          trend={{ value: 0, isPositive: true }}
         />
       </div>
 
@@ -216,14 +244,14 @@ export default function Analytics() {
           </CardContent>
         </Card>
 
-        {/* AI vs Static */}
+        {/* Bot vs Human */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              AI vs Static Replies
+              Message Direction
             </CardTitle>
-            <CardDescription>Response type distribution</CardDescription>
+            <CardDescription>Inbound vs Outbound messages</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">

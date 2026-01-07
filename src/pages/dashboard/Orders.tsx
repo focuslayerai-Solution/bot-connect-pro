@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ShoppingCart, Search, Filter, MoreHorizontal } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,66 +18,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useOrders, useOrderStats, useUpdateOrderStatus } from "@/hooks/useOrders";
+import { format } from "date-fns";
+import { toast } from "sonner";
+import type { OrderStatus } from "@/types/database";
 
-interface Order {
-  id: string;
-  customer: string;
-  phone: string;
-  details: string;
-  total: string;
-  status: "pending" | "accepted" | "completed" | "cancelled";
-  createdAt: string;
-}
-
-const mockOrders: Order[] = [
-  {
-    id: "ORD-001",
-    customer: "Maria Santos",
-    phone: "+1 234 567 8901",
-    details: "2x Margherita Pizza, 1x Caesar Salad",
-    total: "$45.00",
-    status: "pending",
-    createdAt: "2024-01-15 10:30 AM",
-  },
-  {
-    id: "ORD-002",
-    customer: "John Doe",
-    phone: "+1 234 567 8902",
-    details: "1x Pasta Carbonara, 2x Tiramisu",
-    total: "$38.50",
-    status: "accepted",
-    createdAt: "2024-01-15 09:45 AM",
-  },
-  {
-    id: "ORD-003",
-    customer: "Sarah Wilson",
-    phone: "+1 234 567 8903",
-    details: "4x Garlic Bread, 2x Minestrone Soup",
-    total: "$28.00",
-    status: "completed",
-    createdAt: "2024-01-15 08:20 AM",
-  },
-  {
-    id: "ORD-004",
-    customer: "Mike Johnson",
-    phone: "+1 234 567 8904",
-    details: "1x Family Combo, 2x Soft Drinks",
-    total: "$65.00",
-    status: "pending",
-    createdAt: "2024-01-14 07:15 PM",
-  },
-  {
-    id: "ORD-005",
-    customer: "Emily Brown",
-    phone: "+1 234 567 8905",
-    details: "3x Bruschetta, 1x House Wine",
-    total: "$42.00",
-    status: "cancelled",
-    createdAt: "2024-01-14 06:00 PM",
-  },
-];
-
-const getStatusVariant = (status: Order["status"]) => {
+const getStatusVariant = (status: OrderStatus) => {
   switch (status) {
     case "pending":
       return "warning";
@@ -85,6 +32,7 @@ const getStatusVariant = (status: Order["status"]) => {
     case "completed":
       return "success";
     case "cancelled":
+    case "rejected":
       return "error";
     default:
       return "default";
@@ -92,6 +40,45 @@ const getStatusVariant = (status: Order["status"]) => {
 };
 
 export default function Orders() {
+  const { data: orders = [], isLoading } = useOrders();
+  const stats = useOrderStats();
+  const updateStatus = useUpdateOrderStatus();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredOrders = orders.filter(
+    (order) =>
+      order.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.customer_number.includes(searchQuery) ||
+      order.id.includes(searchQuery)
+  );
+
+  const handleStatusChange = async (orderId: string, status: OrderStatus) => {
+    try {
+      await updateStatus.mutateAsync({ orderId, status });
+      toast.success(`Order ${status}`);
+    } catch (error) {
+      toast.error("Failed to update order status");
+    }
+  };
+
+  const formatOrderDetails = (details: Record<string, unknown>) => {
+    if (typeof details === "string") return details;
+    if (Array.isArray(details)) {
+      return details.map((item: { name?: string; quantity?: number }) => 
+        `${item.quantity || 1}x ${item.name || "Item"}`
+      ).join(", ");
+    }
+    return JSON.stringify(details);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -111,25 +98,25 @@ export default function Orders() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
-            <p className="text-2xl font-bold text-foreground">5</p>
+            <p className="text-2xl font-bold text-foreground">{stats.total}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Pending</p>
-            <p className="text-2xl font-bold text-warning">2</p>
+            <p className="text-2xl font-bold text-warning">{stats.pending}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Accepted</p>
-            <p className="text-2xl font-bold text-info">1</p>
+            <p className="text-2xl font-bold text-info">{stats.accepted}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Completed</p>
-            <p className="text-2xl font-bold text-success">1</p>
+            <p className="text-2xl font-bold text-success">{stats.completed}</p>
           </CardContent>
         </Card>
       </div>
@@ -145,7 +132,12 @@ export default function Orders() {
             <div className="flex gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Search orders..." className="w-64 pl-9" />
+                <Input
+                  placeholder="Search orders..."
+                  className="w-64 pl-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
               <Button variant="outline" size="icon">
                 <Filter className="h-4 w-4" />
@@ -154,61 +146,76 @@ export default function Orders() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Order ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead className="hidden md:table-cell">Order Details</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden sm:table-cell">Created</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockOrders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell className="font-medium">{order.id}</TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{order.customer}</p>
-                      <p className="text-sm text-muted-foreground">{order.phone}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden max-w-xs truncate md:table-cell">
-                    {order.details}
-                  </TableCell>
-                  <TableCell className="font-medium">{order.total}</TableCell>
-                  <TableCell>
-                    <StatusBadge variant={getStatusVariant(order.status)}>
-                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                    </StatusBadge>
-                  </TableCell>
-                  <TableCell className="hidden text-muted-foreground sm:table-cell">
-                    {order.createdAt}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Accept Order</DropdownMenuItem>
-                        <DropdownMenuItem>Mark Complete</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
-                          Cancel Order
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+          {filteredOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <ShoppingCart className="h-12 w-12 text-muted-foreground" />
+              <p className="mt-4 text-sm text-muted-foreground">No orders yet</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="hidden md:table-cell">Order Details</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden sm:table-cell">Created</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredOrders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-medium">{order.id.slice(0, 8)}</TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{order.customer_name || "Unknown"}</p>
+                        <p className="text-sm text-muted-foreground">{order.customer_number}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden max-w-xs truncate md:table-cell">
+                      {formatOrderDetails(order.details)}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      ${order.total_amount?.toFixed(2) || "0.00"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge variant={getStatusVariant(order.status)}>
+                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell className="hidden text-muted-foreground sm:table-cell">
+                      {format(new Date(order.created_at), "MMM d, h:mm a")}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleStatusChange(order.id, "accepted")}>
+                            Accept Order
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange(order.id, "completed")}>
+                            Mark Complete
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => handleStatusChange(order.id, "cancelled")}
+                          >
+                            Cancel Order
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

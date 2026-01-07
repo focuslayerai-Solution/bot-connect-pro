@@ -210,9 +210,14 @@ export default function Index() {
               </div>
               <span className="font-semibold text-foreground">BotFlow</span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              © 2024 BotFlow. All rights reserved.
-            </p>
+            <div className="flex items-center gap-4">
+              <Link to="/privacy-policy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Privacy Policy
+              </Link>
+              <p className="text-sm text-muted-foreground">
+                © 2024 BotFlow. All rights reserved.
+              </p>
+            </div>
           </div>
         </div>
       </footer>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bot, Save, MessageSquare, Eye } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,40 +7,70 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { StatusBadge } from "@/components/ui/status-badge";
-
-interface BotConfig {
-  greeting: string;
-  businessName: string;
-  businessDescription: string;
-  workingHours: string;
-  faqAnswers: string;
-  menuServices: string;
-  isActive: boolean;
-}
+import { useBotConfig, useUpdateBotConfig } from "@/hooks/useBotConfig";
+import { toast } from "sonner";
 
 export default function BotConfig() {
-  const [config, setConfig] = useState<BotConfig>({
-    greeting: "Welcome to our business! How can I help you today?",
-    businessName: "My Business",
-    businessDescription: "We provide excellent services to our customers.",
-    workingHours: "Monday - Friday: 9 AM - 6 PM\nSaturday: 10 AM - 4 PM\nSunday: Closed",
-    faqAnswers: "Q: What are your hours?\nA: We're open Mon-Fri 9-6, Sat 10-4.\n\nQ: Do you deliver?\nA: Yes, we offer delivery within 5km radius.",
-    menuServices: "Service 1 - $25\nService 2 - $50\nService 3 - $75",
-    isActive: false,
-  });
+  const { data: botConfig, isLoading } = useBotConfig();
+  const updateBotConfig = useUpdateBotConfig();
 
-  const [isSaving, setIsSaving] = useState(false);
+  const [greeting, setGreeting] = useState("Welcome to our business! How can I help you today?");
+  const [faqAnswers, setFaqAnswers] = useState("");
+  const [orderEnabled, setOrderEnabled] = useState(false);
+  const [appointmentEnabled, setAppointmentEnabled] = useState(false);
 
-  const handleSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-    }, 1000);
+  useEffect(() => {
+    if (botConfig) {
+      setGreeting(botConfig.greeting_message || "Welcome to our business! How can I help you today?");
+      setOrderEnabled(botConfig.order_enabled || false);
+      setAppointmentEnabled(botConfig.appointment_enabled || false);
+      if (botConfig.static_replies && Array.isArray(botConfig.static_replies)) {
+        const faqText = botConfig.static_replies
+          .map((r: { question: string; answer: string }) => `Q: ${r.question}\nA: ${r.answer}`)
+          .join("\n\n");
+        setFaqAnswers(faqText);
+      }
+    }
+  }, [botConfig]);
+
+  const handleSave = async () => {
+    try {
+      // Parse FAQ text into structured format
+      const staticReplies: Array<{ question: string; answer: string }> = [];
+      const faqParts = faqAnswers.split(/\n\n+/);
+      faqParts.forEach((part) => {
+        const lines = part.split("\n");
+        const questionLine = lines.find((l) => l.startsWith("Q:"));
+        const answerLine = lines.find((l) => l.startsWith("A:"));
+        if (questionLine && answerLine) {
+          staticReplies.push({
+            question: questionLine.replace("Q:", "").trim(),
+            answer: answerLine.replace("A:", "").trim(),
+          });
+        }
+      });
+
+      await updateBotConfig.mutateAsync({
+        greeting_message: greeting,
+        static_replies: staticReplies,
+        order_enabled: orderEnabled,
+        appointment_enabled: appointmentEnabled,
+      });
+      toast.success("Bot configuration saved!");
+    } catch (error) {
+      toast.error("Failed to save configuration");
+    }
   };
 
-  const updateConfig = (key: keyof BotConfig, value: string | boolean) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
-  };
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  const isActive = !!botConfig?.bot_id;
 
   return (
     <div className="animate-fade-in">
@@ -55,72 +85,52 @@ export default function BotConfig() {
               <p className="page-description">Customize your bot's messages and behavior</p>
             </div>
           </div>
-          <StatusBadge variant={config.isActive ? "active" : "inactive"}>
-            {config.isActive ? "Active" : "Inactive"}
+          <StatusBadge variant={isActive ? "active" : "inactive"}>
+            {isActive ? "Active" : "No Bot Selected"}
           </StatusBadge>
         </div>
       </div>
 
+      {!isActive && (
+        <div className="mb-6 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
+          <p className="text-sm text-warning">
+            No bot selected. Visit the Bot Marketplace to choose a bot template first.
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Configuration Form */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Bot Status */}
+          {/* Bot Features */}
           <Card>
             <CardHeader>
-              <CardTitle>Bot Status</CardTitle>
-              <CardDescription>Enable or disable your bot</CardDescription>
+              <CardTitle>Bot Features</CardTitle>
+              <CardDescription>Enable or disable bot capabilities</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border border-border p-4">
                 <div>
-                  <Label className="text-base">Activate Bot</Label>
+                  <Label className="text-base">Order Taking</Label>
                   <p className="text-sm text-muted-foreground">
-                    When active, the bot will automatically respond to messages
+                    Allow bot to take and process orders
                   </p>
                 </div>
                 <Switch
-                  checked={config.isActive}
-                  onCheckedChange={(checked) => updateConfig("isActive", checked)}
+                  checked={orderEnabled}
+                  onCheckedChange={setOrderEnabled}
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Business Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Business Information</CardTitle>
-              <CardDescription>Basic information about your business</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="businessName">Business Name</Label>
-                  <Input
-                    id="businessName"
-                    value={config.businessName}
-                    onChange={(e) => updateConfig("businessName", e.target.value)}
-                    placeholder="Your Business Name"
-                  />
+              <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                <div>
+                  <Label className="text-base">Appointment Booking</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Allow bot to schedule appointments
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="workingHours">Working Hours</Label>
-                  <Input
-                    id="workingHours"
-                    value={config.workingHours.split("\n")[0]}
-                    onChange={(e) => updateConfig("workingHours", e.target.value)}
-                    placeholder="Mon-Fri: 9 AM - 6 PM"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="businessDescription">Business Description</Label>
-                <Textarea
-                  id="businessDescription"
-                  value={config.businessDescription}
-                  onChange={(e) => updateConfig("businessDescription", e.target.value)}
-                  placeholder="Describe your business..."
-                  rows={3}
+                <Switch
+                  checked={appointmentEnabled}
+                  onCheckedChange={setAppointmentEnabled}
                 />
               </div>
             </CardContent>
@@ -137,8 +147,8 @@ export default function BotConfig() {
                 <Label htmlFor="greeting">Greeting Message</Label>
                 <Textarea
                   id="greeting"
-                  value={config.greeting}
-                  onChange={(e) => updateConfig("greeting", e.target.value)}
+                  value={greeting}
+                  onChange={(e) => setGreeting(e.target.value)}
                   placeholder="Welcome message for new conversations..."
                   rows={2}
                 />
@@ -147,32 +157,22 @@ export default function BotConfig() {
                 <Label htmlFor="faq">FAQ Answers</Label>
                 <Textarea
                   id="faq"
-                  value={config.faqAnswers}
-                  onChange={(e) => updateConfig("faqAnswers", e.target.value)}
-                  placeholder="Q: Question?\nA: Answer..."
-                  rows={6}
+                  value={faqAnswers}
+                  onChange={(e) => setFaqAnswers(e.target.value)}
+                  placeholder="Q: Question?&#10;A: Answer...&#10;&#10;Q: Another question?&#10;A: Another answer..."
+                  rows={8}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Format: Q: Question? followed by A: Answer on the next line
+                  Format: Q: Question? followed by A: Answer on the next line. Separate pairs with blank lines.
                 </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="menu">Menu / Services List</Label>
-                <Textarea
-                  id="menu"
-                  value={config.menuServices}
-                  onChange={(e) => updateConfig("menuServices", e.target.value)}
-                  placeholder="Item 1 - $10&#10;Item 2 - $20"
-                  rows={4}
-                />
               </div>
             </CardContent>
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button onClick={handleSave} disabled={updateBotConfig.isPending}>
               <Save className="mr-2 h-4 w-4" />
-              {isSaving ? "Saving..." : "Save Configuration"}
+              {updateBotConfig.isPending ? "Saving..." : "Save Configuration"}
             </Button>
           </div>
         </div>
@@ -201,20 +201,7 @@ export default function BotConfig() {
                       <MessageSquare className="h-3.5 w-3.5 text-primary-foreground" />
                     </div>
                     <div className="chat-bubble-outgoing max-w-[80%]">
-                      <p className="text-sm">{config.greeting}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-end justify-end">
-                    <div className="chat-bubble-incoming max-w-[80%]">
-                      <p className="text-sm">What are your hours?</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary">
-                      <MessageSquare className="h-3.5 w-3.5 text-primary-foreground" />
-                    </div>
-                    <div className="chat-bubble-outgoing max-w-[80%]">
-                      <p className="text-sm whitespace-pre-line">{config.workingHours}</p>
+                      <p className="text-sm">{greeting}</p>
                     </div>
                   </div>
                 </div>
