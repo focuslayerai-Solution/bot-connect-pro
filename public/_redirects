@@ -1,0 +1,4 @@
+# Handle client-side routing
+/privacy-policy /index.html 200
+/privacy-policy/* /index.html 200
+/* /index.html 200

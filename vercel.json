@@ -1,6 +1,8 @@
 {
-  "rewrites": [
-    { "source": "/privacy-policy", "destination": "/index.html" },
-    { "source": "/privacy-policy/(.*)", "destination": "/index.html" }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/privacy-policy", "dest": "/index.html" },
+    { "src": "/privacy-policy/(.*)", "dest": "/index.html" },
+    { "src": "/(.*)", "status": 200, "dest": "/index.html" }
   ]
 }
